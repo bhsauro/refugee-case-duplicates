@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dupcheck"
+version = "1.0.0"
+description = "Duplicate detection tool for refugee case management data"
+authors = [{name = "Brooke Sauro"}]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.0.0",
+    "openpyxl>=3.1.0",
+    "xlsxwriter>=3.1.0",
+]
+
+[project.scripts]
+dupcheck = "dupcheck.cli:main"
