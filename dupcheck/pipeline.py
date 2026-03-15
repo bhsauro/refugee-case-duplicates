@@ -40,7 +40,7 @@ Future Enhancements:
 """
 
 from pathlib import Path
-from dupcheck import io, extract, normalize, detect
+from dupcheck import io, normalize, detect
 from dupcheck.constants import (
     PERSON_ID_PATTERN,
     EMAIL_PATTERN,
