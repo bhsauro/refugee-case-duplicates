@@ -1,6 +1,39 @@
 # Testing Strategy
 
-This document outlines the testing approach for the refugee case duplicate detection tool. While a comprehensive test suite is not currently implemented, this strategy documents how testing would be structured for production use.
+This document outlines the testing approach for the refugee case duplicate detection tool.
+
+## Current Test Coverage
+
+**Implemented Tests:**
+- ✅ `tests/test_normalize.py` - Unit tests for normalization functions
+  - Eastern Arabic to Western numeral conversion
+  - Phone number space cleaning
+  - Country code addition
+  - UNHCR case number formatting
+
+- ✅ `tests/test_detect.py` - Unit tests for duplicate detection
+  - Core duplicate detection algorithm
+  - Multi-criteria duplicate flagging
+  - Edge cases (empty data, nulls, within-ID duplicates)
+
+**To Run Tests:**
+```bash
+# Install dev dependencies
+pip install -r requirements-dev.txt
+
+# Run all tests
+pytest
+
+# Run with coverage report
+pytest --cov=dupcheck --cov-report=term-missing
+
+# Run specific test file
+pytest tests/test_normalize.py
+```
+
+## Planned Additional Coverage
+
+While core normalization and detection are tested, a comprehensive test suite would additionally include:
 
 ## Test Coverage Plan
 

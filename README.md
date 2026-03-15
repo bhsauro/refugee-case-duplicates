@@ -175,7 +175,21 @@ Handles multiple case number formats:
 
 ## Testing & Development
 
-See [TESTING.md](TESTING.md) for the comprehensive testing strategy, including planned unit tests, integration tests, and logging/observability enhancements for production deployment.
+This project includes unit tests for core normalization and duplicate detection logic.
+
+**Run tests:**
+```bash
+# Install dev dependencies
+pip install -r requirements-dev.txt
+
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=dupcheck
+```
+
+See [TESTING.md](TESTING.md) for the comprehensive testing strategy, including current test coverage, planned expansions, and logging/observability enhancements for production deployment.
 
 ## Requirements
 

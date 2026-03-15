@@ -139,6 +139,7 @@ def process_duplicates(cases_path: Path, people_path: Path, output_path: Path) -
     combined = combined.drop("Duplicate", axis=1)
 
     # === Detect phone number matches ===
+    
     # Phone normalization requires multiple steps to handle international variations:
     # 1. Convert Eastern Arabic numerals (٠-٩) to Western (0-9)
     # 2. Remove special characters (parentheses, dashes, dots)
