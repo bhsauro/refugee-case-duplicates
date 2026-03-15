@@ -1,8 +1,8 @@
 # Refugee Case Duplicate Checker
 
-A data engineering tool designed to identify whether applicants for legal assistance in refugee case management already exist in the system—whether they have active cases or have applied for assistance in the past.
+A duplicate detection tool for refugee case management data using multi-criteria matching to identify whether applicants for legal assistance already exist in the system—whether they have active cases or have applied for assistance in the past.
 
-This tool detects duplicate records across multiple criteria including names, phone numbers, emails, and external case numbers (UNHCR, USRAP, SIV programs). It helps prevent duplicate case creation and ensures accurate tracking of client interactions.
+Detects duplicates across names, phone numbers, emails, and external case numbers (UNHCR, USRAP, SIV programs) with support for international data formats including Eastern Arabic numerals and multi-country phone number normalization.
 
 **Note:** The data schemas and ID patterns shown in this codebase are no longer in use. This tool was built for a legacy case management system that has since been replaced with a modern relational database.
 
