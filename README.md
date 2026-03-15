@@ -173,6 +173,10 @@ Handles multiple case number formats:
 4. Flag records with one or more duplicate matches
 5. Count duplicate flags per record for prioritization
 
+## Testing & Development
+
+See [TESTING.md](TESTING.md) for the comprehensive testing strategy, including planned unit tests, integration tests, and logging/observability enhancements for production deployment.
+
 ## Requirements
 
 - Python 3.10+
