@@ -28,110 +28,99 @@ def process_duplicates(cases_path: Path, people_path: Path, output_path: Path) -
         cases_path: Path to Cases.xlsx file
         people_path: Path to People.xlsx file
         output_path: Path for output Excel file
-
-    Example:
-        >>> from pathlib import Path
-        >>> from dupcheck.pipeline import process_duplicates
-        >>> process_duplicates(
-        ...     Path("Cases.xlsx"),
-        ...     Path("People.xlsx"),
-        ...     Path("results.xlsx")
-        ... )
     """
     print("Reading input files...")
     cases = io.read_cases(cases_path)
     people = io.read_people(people_path)
 
     print("Extracting person IDs from case tags...")
-    personid_cols = extract.extract_and_expand(
-        cases, "Tags", "person_ids", PERSON_ID_PATTERN
-    )
+    # Extract person IDs from the tags field as a list
+    cases["person_ids"] = cases["Tags"].str.findall(PERSON_ID_PATTERN)
 
-    print("Merging cases and people data...")
+    print("Creating junction table and merging with people data...")
+    # Create junction table (case-person relationships) - grows vertically
+    case_person = cases[["Unique ID (Case)", "person_ids"]].explode("person_ids")
+
+    # Normalize person IDs for matching
     people["Unique ID (Person)"] = people["Unique ID (Person)"].str.lower()
+    case_person["person_ids"] = case_person["person_ids"].str.lower()
 
-    # Merge first person
-    combined = cases.merge(
-        people, how="left", left_on=personid_cols[0], right_on="Unique ID (Person)"
+    # Single merge with people data (one-to-many relationship)
+    combined = case_person.merge(
+        people, left_on="person_ids", right_on="Unique ID (Person)", how="left"
     )
 
-    # Merge additional people
-    for i, col in enumerate(personid_cols[1:], start=1):
-        suffix_left = f" {i}"
-        suffix_right = f" {i+1}"
-        combined = combined.merge(
-            people,
-            how="left",
-            left_on=col,
-            right_on="Unique ID (Person)",
-            suffixes=(suffix_left, suffix_right),
-        )
+    # Merge case metadata back
+    case_metadata = cases[
+        [
+            "Unique ID (Case)",
+            "Client",
+            "Office",
+            "External Case Number",
+            "Stage",
+            "Country",
+            "Country of Origin",
+            "Date of Initial Contact",
+        ]
+    ]
+    combined = combined.merge(case_metadata, on="Unique ID (Case)", how="left")
+
+    # === Detect name matches ===
 
     print("Checking for duplicate names...")
-    name_cols = [col for col in combined if col.startswith("Full Name")]
-    combined["Names"] = combined.apply(
-        lambda row: extract.combine_fields(row, name_cols), axis=1
+    combined = detect.find_duplicates(
+        combined, ["Full Name", "Full Name in Native Script"], flag_col="Duplicate"
     )
-    combined = detect.find_duplicates(combined, name_cols, flag_col="Duplicate")
     combined["duplicate_name"] = combined["Duplicate"].fillna(False)
     combined = combined.drop("Duplicate", axis=1)
 
+    # === Detect email matches ===
+
     print("Checking for duplicate emails...")
-    email_cols = [col for col in combined if col.startswith("Preferred Email")]
-    combined["Emails"] = combined.apply(
-        lambda row: extract.combine_fields(row, email_cols), axis=1
+    # the Preferred Email field can contain multiple emails 
+    combined["Emails_extracted"] = combined["Preferred Email"].str.findall(
+        EMAIL_PATTERN
     )
-    new_email_cols = extract.extract_and_expand(
-        combined, "Emails", "Emails", EMAIL_PATTERN
+    combined["Emails_extracted"] = combined["Emails_extracted"].str.join(", ")
+    combined = detect.find_duplicates(
+        combined, ["Emails_extracted"], flag_col="Duplicate"
     )
-    combined = detect.find_duplicates(combined, new_email_cols, flag_col="Duplicate")
     combined["duplicate_email"] = combined["Duplicate"].fillna(False)
     combined = combined.drop("Duplicate", axis=1)
 
-    print("Normalizing and checking phone numbers...")
-    phone_cols = [col for col in combined if col.startswith("Phone Number")]
-    combined["Phone Numbers"] = combined.apply(
-        lambda row: extract.combine_fields(row, phone_cols), axis=1
-    )
+    # === Detect phone number matches ===
 
-    # Normalize Arabic numerals and clean
-    combined["Phone Numbers"] = combined["Phone Numbers"].apply(
+    print("Normalizing and checking phone numbers...")
+    combined["Phone_normalized"] = combined["Phone Number"].apply(
         normalize.normalize_arabic_numerals
     )
-    combined["Phone Numbers"] = combined["Phone Numbers"].str.replace(
+    combined["Phone_normalized"] = combined["Phone_normalized"].str.replace(
         r"([^\s0-9])", "", regex=True
     )
-    combined["Phone Numbers"] = combined["Phone Numbers"].apply(
+    combined["Phone_normalized"] = combined["Phone_normalized"].apply(
         normalize.clean_phone_spaces
     )
-
-    # Extract phone numbers
-    new_phone_cols = extract.extract_and_expand(
-        combined, "Phone Numbers", "Phone Numbers", PHONE_PATTERN
-    )
+    combined["Phone_normalized"] = combined["Phone_normalized"].str.lstrip("0")
 
     # Add country codes
-    for col in new_phone_cols:
-        combined[col] = combined[col].str.lstrip("0")
-        combined[col] = combined.apply(
-            lambda row: normalize.add_country_code(
-                row[col], get_country_code(row.get("Country"))
-            ),
-            axis=1,
-        )
-
-    combined["Phone Numbers"] = combined.apply(
-        lambda row: extract.combine_fields(row, new_phone_cols), axis=1
+    combined["Phone_normalized"] = combined.apply(
+        lambda row: normalize.add_country_code(
+            row["Phone_normalized"], get_country_code(row.get("Country"))
+        ),
+        axis=1,
     )
-    combined = detect.find_duplicates(combined, new_phone_cols, flag_col="Duplicate")
+
+    combined = detect.find_duplicates(
+        combined, ["Phone_normalized"], flag_col="Duplicate"
+    )
     combined["duplicate_phone"] = combined["Duplicate"].fillna(False)
     combined = combined.drop("Duplicate", axis=1)
 
+    # === Detect case number matches ===
+
     print("Checking for duplicate case numbers...")
-    combined.rename(
-        columns={"External Case Number": "Case Numbers"}, inplace=True
-    )
-    combined["Case Numbers"] = combined["Case Numbers"].str.upper()
+    # Case numbers are at case level, not person level
+    combined["Case Numbers"] = combined["External Case Number"].str.upper()
     combined["Case Numbers"] = combined["Case Numbers"].apply(
         normalize.normalize_arabic_numerals
     )
@@ -145,39 +134,56 @@ def process_duplicates(cases_path: Path, people_path: Path, output_path: Path) -
     combined["UNHCR"] = combined["Case Numbers"].str.extract(UNHCR_PATTERN)
     combined["UNHCR"] = combined["UNHCR"].apply(normalize.normalize_unhcr_case_number)
 
-    case_cols = ["SIV (NVC)", "SIV (Embassy)", "USRAP", "UNHCR"]
-    combined["Case Numbers"] = combined.apply(
-        lambda row: extract.combine_fields(row, case_cols), axis=1
+    # Check for duplicates across case number types
+    combined = detect.find_duplicates(
+        combined,
+        ["SIV (NVC)", "SIV (Embassy)", "USRAP", "UNHCR"],
+        flag_col="Duplicate",
     )
-    combined["Case Numbers"] = combined["Case Numbers"].str.replace("nan, ", "", regex=False)
-
-    # Find non-duplicates first
-    combined_copy = combined.copy()
-    for col in case_cols:
-        combined_copy = combined_copy.drop(
-            combined_copy[
-                combined_copy.duplicated([col], keep=False) & combined_copy[col].notnull()
-            ].index,
-            axis=0,
-        )
-
-    combined_copy = combined_copy.drop(combined_copy.columns[1:], axis=1)
-    combined_copy["Non-duplicate"] = True
-    combined = combined.merge(combined_copy, on="Unique ID (Case)", how="left")
-    combined["duplicate_casenum"] = ~combined["Non-duplicate"].fillna(False)
-    combined = combined.drop("Non-duplicate", axis=1)
+    combined["duplicate_casenum"] = combined["Duplicate"].fillna(False)
+    combined = combined.drop("Duplicate", axis=1)
 
     print("Finalizing duplicate detection...")
+    # Mark duplicates at person level
+    # Each row represents one person - if they have a duplicate, they get flagged
     combined = detect.mark_duplicates(combined, DUPLICATE_TYPES, MIN_DUPLICATE_FLAGS)
 
-    # Filter to duplicates only
-    duplicates = combined[combined["duplicate"]]
-    duplicates.rename(columns={"person_ids": "Unique ID (Person)"}, inplace=True)
+    # Filter to people with duplicates (person-level output)
+    duplicates = combined[combined["duplicate"]].copy()
 
-    # Select output columns (only those that exist)
-    output_cols = [col for col in OUTPUT_COLUMNS if col in duplicates.columns]
+    # Rename columns for output clarity
+    duplicates.rename(
+        columns={
+            "person_ids": "Unique ID (Person)",
+            "Full Name": "Name",
+            "Emails_extracted": "Email",
+            "Phone_normalized": "Phone Number",
+        },
+        inplace=True,
+    )
+
+    # Select and reorder output columns
+    output_columns_person_level = [
+        "Unique ID (Case)",
+        "Unique ID (Person)",
+        "Name",
+        "Phone Number",
+        "Email",
+        "Office",
+        "Stage",
+        "Date of Initial Contact",
+        "Case Numbers",
+        "num_dup_flags",
+        "duplicate_name",
+        "duplicate_phone",
+        "duplicate_email",
+        "duplicate_casenum",
+    ]
+
+    # Select only columns that exist
+    output_cols = [col for col in output_columns_person_level if col in duplicates.columns]
     duplicates = duplicates[output_cols]
 
-    print(f"Found {len(duplicates)} duplicate records")
+    print(f"Found {len(duplicates)} people with duplicate flags")
 
     io.write_duplicates(duplicates, output_path)

@@ -4,7 +4,7 @@ This module contains stable reference data organized with module-level constants
 
 NOTE: These schemas reflect a legacy case management system that has since been deprecated
 in favor of a modern relational database with proper foreign key relationships.
-This tool was designed for the legacy system where person IDs were stored in unstructured
+This tool was designed for the legacy system where contact IDs were stored in unstructured
 tag fields rather than proper relational links.
 """
 
