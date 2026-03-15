@@ -1,4 +1,18 @@
-"""Duplicate detection logic."""
+"""Duplicate detection logic.
+
+The core duplicate detection uses pandas melt-and-filter pattern:
+    1. Melt specified columns into long format (value column + variable name)
+    2. Remove within-ID duplicates (same value listed twice for same case)
+    3. Find values that appear across multiple IDs (cross-case duplicates)
+    4. Flag all IDs that contain duplicate values
+
+This approach is vectorized (uses pandas' C-optimized operations) and is
+performant for datasets up to ~100K rows. For larger datasets or real-time
+requirements, consider:
+    - Hash-based deduplication with groupby() instead of melt
+    - Database-native duplicate detection with SQL window functions
+    - Distributed processing with Spark for multi-million row datasets
+"""
 
 import pandas as pd
 

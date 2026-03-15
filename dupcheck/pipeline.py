@@ -1,4 +1,43 @@
-"""Main duplicate detection pipeline."""
+"""Main duplicate detection pipeline.
+
+Architecture Overview:
+    This pipeline uses a normalized junction table approach for handling many-to-many
+    relationships between cases and people. Rather than creating wide tables with
+    dynamic columns (Full Name, Full Name 2, Full Name 3...), we use pandas.explode()
+    to create a vertical junction table that grows with rows, not columns.
+
+    This approach:
+    - Scales better (handles 1 or 100 people per case identically)
+    - Simplifies duplicate detection (check single columns instead of Column 1, 2, 3...)
+    - Produces person-level output (more actionable than case-level aggregates)
+    - Aligns with relational database best practices
+
+Multi-Criteria Duplicate Detection:
+    The pipeline checks four independent criteria for duplicates:
+    1. Names (including native script variations)
+    2. Email addresses (extracted via regex)
+    3. Phone numbers (normalized: Arabic→Western numerals, country codes added)
+    4. External case numbers (UNHCR, USRAP, SIV formats)
+
+    Each criterion is checked separately, then results are combined to flag people
+    who match on one or more criteria.
+
+Output:
+    Person-level records showing which individuals have duplicates across cases.
+
+Future Enhancements:
+    The current implementation tracks boolean flags (duplicate_name: True/False)
+    but does not track match metadata such as:
+    - Which specific cases/people matched (e.g., "person-123 also appears in case-042, case-089")
+    - Match counts per criterion (e.g., "3 cases with same phone number")
+    - Which values caused the match (e.g., "Matched on phone: 961123456")
+
+    This metadata would be valuable for case review workflows, allowing case managers
+    to see exactly which cases need to be merged or reviewed together. Implementation
+    would involve extending detect.find_duplicates() to return a hash map of
+    value → matching case IDs, then joining this back to the main dataframe as
+    additional columns (e.g., "matching_case_ids", "matching_phone_values").
+"""
 
 from pathlib import Path
 from dupcheck import io, extract, normalize, detect
@@ -38,7 +77,18 @@ def process_duplicates(cases_path: Path, people_path: Path, output_path: Path) -
     cases["person_ids"] = cases["Tags"].str.findall(PERSON_ID_PATTERN)
 
     print("Creating junction table and merging with people data...")
-    # Create junction table (case-person relationships) - grows vertically
+    # Create junction table to handle many-to-many relationships
+    # Using explode() transforms:
+    #   case-001: [person-123, person-456, person-789] (1 row, list column)
+    # Into:
+    #   case-001: person-123 (3 rows, one per person)
+    #   case-001: person-456
+    #   case-001: person-789
+    #
+    # This normalized structure:
+    # - Scales predictably (memory grows with rows, not columns)
+    # - Simplifies duplicate detection (check single "Full Name" column, not Name1, Name2, Name3)
+    # - Enables person-level output (show which specific person is duplicate)
     case_person = cases[["Unique ID (Case)", "person_ids"]].explode("person_ids")
 
     # Normalize person IDs for matching
@@ -89,6 +139,14 @@ def process_duplicates(cases_path: Path, people_path: Path, output_path: Path) -
     combined = combined.drop("Duplicate", axis=1)
 
     # === Detect phone number matches ===
+    # Phone normalization requires multiple steps to handle international variations:
+    # 1. Convert Eastern Arabic numerals (٠-٩) to Western (0-9)
+    # 2. Remove special characters (parentheses, dashes, dots)
+    # 3. Clean spacing (some entries use spaces as delimiters: "961 123 456")
+    # 4. Strip leading zeros (local format: "0123456" vs international: "123456")
+    # 5. Add country codes based on client location (many entries missing country code)
+    #
+    # Example: "٩٦١-١٢٣-٤٥٦" → "961123456" for accurate matching
 
     print("Normalizing and checking phone numbers...")
     combined["Phone_normalized"] = combined["Phone Number"].apply(
@@ -102,7 +160,7 @@ def process_duplicates(cases_path: Path, people_path: Path, output_path: Path) -
     )
     combined["Phone_normalized"] = combined["Phone_normalized"].str.lstrip("0")
 
-    # Add country codes
+    # Add country codes based on client location
     combined["Phone_normalized"] = combined.apply(
         lambda row: normalize.add_country_code(
             row["Phone_normalized"], get_country_code(row.get("Country"))

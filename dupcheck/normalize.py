@@ -1,4 +1,18 @@
-"""Data normalization and cleaning functions."""
+"""Data normalization and cleaning functions.
+
+Handles domain-specific normalization challenges for refugee case data:
+    - Eastern Arabic numerals (٠-٩) commonly used in Middle East/North Africa
+    - Phone numbers without country codes (require geographic context)
+    - Inconsistent spacing and formatting in user-entered data
+    - UNHCR case number format variations
+
+These normalizations are critical for accurate duplicate detection across
+international data sources where the same phone number might be entered as:
+    "961 123 456" (Lebanon, with spaces)
+    "٩٦١١٢٣٤٥٦" (Eastern Arabic numerals)
+    "123456" (missing country code)
+All normalize to: "961123456" for comparison.
+"""
 
 import pandas as pd
 import re
@@ -6,6 +20,7 @@ from dupcheck.constants import VALID_PHONE_PREFIXES, get_country_code
 
 
 # Eastern Arabic to Western Arabic numeral mapping
+# Maps Unicode codepoints for Eastern Arabic (U+0660-U+0669) to ASCII (48-57)
 NUMERAL_TABLE = {
     1632: 48,  # 0
     1633: 49,  # 1
