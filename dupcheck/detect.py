@@ -20,15 +20,20 @@ import pandas as pd
 def find_duplicates(
     df: pd.DataFrame,
     value_cols: list[str],
-    id_col: str = "Unique ID (Case)",
+    id_col: str = "Unique ID (Person)",
     flag_col: str = "Duplicate",
 ) -> pd.DataFrame:
     """Find duplicate values across specified columns.
 
+    Detects when the same value appears across different IDs. Useful for identifying
+    duplicate people (same name/phone/email with different person IDs) or duplicate
+    cases (same case number with different case IDs).
+
     Args:
         df: DataFrame to check for duplicates
         value_cols: Columns to check for duplicate values
-        id_col: Column containing unique identifiers
+        id_col: Column containing unique identifiers (defaults to Person ID for person-level attributes;
+                use "Unique ID (Case)" for case-level attributes like case numbers)
         flag_col: Name for duplicate flag column
 
     Returns:

@@ -194,9 +194,11 @@ def process_duplicates(cases_path: Path, people_path: Path, output_path: Path) -
     combined["UNHCR"] = combined["UNHCR"].apply(normalize.normalize_unhcr_case_number)
 
     # Check for duplicates across case number types
+    # Case numbers are case-level attributes, so check by Case ID not Person ID
     combined = detect.find_duplicates(
         combined,
         ["SIV (NVC)", "SIV (Embassy)", "USRAP", "UNHCR"],
+        id_col="Unique ID (Case)",
         flag_col="Duplicate",
     )
     combined["duplicate_casenum"] = combined["Duplicate"].fillna(False)

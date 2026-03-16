@@ -15,13 +15,13 @@ class TestFindDuplicates:
     """Test the core duplicate detection algorithm."""
 
     def test_detect_simple_duplicate(self):
-        """Should flag cases that share the same value."""
+        """Should flag records that share the same value."""
         df = pd.DataFrame({
             "Unique ID (Case)": ["case-001", "case-002", "case-003"],
             "Name": ["John Doe", "John Doe", "Jane Smith"]
         })
 
-        result = find_duplicates(df, ["Name"], flag_col="duplicate")
+        result = find_duplicates(df, ["Name"], id_col="Unique ID (Case)", flag_col="duplicate")
 
         # case-001 and case-002 should be flagged (both have "John Doe")
         assert result.loc[0, "duplicate"] == True
@@ -30,13 +30,13 @@ class TestFindDuplicates:
         assert pd.isna(result.loc[2, "duplicate"]) or result.loc[2, "duplicate"] == False
 
     def test_no_duplicates(self):
-        """Should not flag any cases when all values are unique."""
+        """Should not flag any records when all values are unique."""
         df = pd.DataFrame({
             "Unique ID (Case)": ["case-001", "case-002", "case-003"],
             "Name": ["John Doe", "Jane Smith", "Bob Jones"]
         })
 
-        result = find_duplicates(df, ["Name"], flag_col="duplicate")
+        result = find_duplicates(df, ["Name"], id_col="Unique ID (Case)", flag_col="duplicate")
 
         # All should be False
         assert result["duplicate"].sum() == 0
@@ -48,19 +48,19 @@ class TestFindDuplicates:
             "Name": ["John Doe", "John Doe", "John Doe"]
         })
 
-        result = find_duplicates(df, ["Name"], flag_col="duplicate")
+        result = find_duplicates(df, ["Name"], id_col="Unique ID (Case)", flag_col="duplicate")
 
         # All should be flagged
         assert result["duplicate"].sum() == 3
 
     def test_ignore_empty_values(self):
-        """Should not flag cases with empty/null values as duplicates."""
+        """Should not flag records with empty/null values as duplicates."""
         df = pd.DataFrame({
             "Unique ID (Case)": ["case-001", "case-002", "case-003"],
             "Name": ["John Doe", "", ""]
         })
 
-        result = find_duplicates(df, ["Name"], flag_col="duplicate")
+        result = find_duplicates(df, ["Name"], id_col="Unique ID (Case)", flag_col="duplicate")
 
         # Empty values shouldn't create duplicate matches
         assert result["duplicate"].sum() == 0
@@ -73,7 +73,7 @@ class TestFindDuplicates:
             "Name2": ["", "John Doe", "Bob Jones"]
         })
 
-        result = find_duplicates(df, ["Name1", "Name2"], flag_col="duplicate")
+        result = find_duplicates(df, ["Name1", "Name2"], id_col="Unique ID (Case)", flag_col="duplicate")
 
         # case-001 and case-002 both have "John Doe" (in different columns)
         assert result.loc[0, "duplicate"] == True
@@ -88,7 +88,7 @@ class TestFindDuplicates:
             "Name": ["John Doe", "John Doe", "Jane Smith"]
         })
 
-        result = find_duplicates(df, ["Name"], flag_col="duplicate")
+        result = find_duplicates(df, ["Name"], id_col="Unique ID (Case)", flag_col="duplicate")
 
         # Both rows of case-001 should not be flagged (same case, same name)
         # This tests the drop_duplicates([id_col, 'value']) logic
@@ -101,7 +101,7 @@ class TestFindDuplicates:
             "Name": ["John Doe", None, None]
         })
 
-        result = find_duplicates(df, ["Name"], flag_col="duplicate")
+        result = find_duplicates(df, ["Name"], id_col="Unique ID (Case)", flag_col="duplicate")
 
         # Nulls shouldn't match each other
         assert result["duplicate"].sum() == 0
@@ -113,7 +113,7 @@ class TestFindDuplicates:
             "Name": []
         })
 
-        result = find_duplicates(df, ["Name"], flag_col="duplicate")
+        result = find_duplicates(df, ["Name"], id_col="Unique ID (Case)", flag_col="duplicate")
 
         assert len(result) == 0
 
